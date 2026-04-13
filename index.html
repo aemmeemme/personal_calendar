@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calendario GitHub CSV</title>
+    <style>
+        /* [Keeping existing CSS from previous response...] */
+        :root { --bg: #f4f7f6; --card: #ffffff; --primary: #2c3e50; --holiday: #e74c3c; --smart: #3498db; --leave: #2ecc71; --partial: #f1c40f; --illness: #9b59b6; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); margin: 0; display: flex; flex-direction: column; height: 100vh; }
+        header { background: var(--primary); color: white; padding: 1rem; display: flex; justify-content: space-between; align-items: center; }
+        .controls { display: flex; gap: 10px; align-items: center; }
+        button { cursor: pointer; padding: 8px 12px; border: none; border-radius: 4px; background: #ecf0f1; font-weight: bold; }
+        button.active { background: var(--smart); color: white; }
+        main { display: flex; flex: 1; overflow: hidden; }
+        #sidebar { width: 280px; background: var(--card); border-right: 1px solid #ddd; padding: 1rem; display: flex; flex-direction: column; gap: 15px; overflow-y: auto; }
+        .tool { padding: 10px; border-radius: 5px; cursor: pointer; color: white; text-align: center; font-weight: bold; opacity: 0.6; }
+        .tool.selected { opacity: 1; outline: 3px solid #333; }
+        .tool-smart { background: var(--smart); }
+        .tool-leave { background: var(--leave); }
+        .tool-partial { background: var(--partial); }
+        .tool-illness { background: var(--illness); }
+        .tool-delete { background: #555; }
+        .totals { border-top: 1px solid #eee; padding-top: 10px; }
+        .total-item { display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 0.9rem; }
+        #calendar-container { flex: 1; padding: 20px; overflow-y: auto; }
+        .month-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; max-width: 1000px; margin: auto; }
+        .day-header { text-align: center; font-weight: bold; padding: 10px; background: #ddd; }
+        .day { background: white; min-height: 80px; border: 1px solid #eee; padding: 5px; cursor: pointer; }
+        .day.holiday { color: var(--holiday); background: #fff5f5; }
+        .entry { margin-top: 4px; padding: 2px 5px; border-radius: 3px; color: white; font-size: 0.75rem; text-align: center; }
+        
+        /* New GitHub Sync Styles */
+        .sync-section { background: #f9f9f9; padding: 10px; border-radius: 5px; border: 1px solid #ccc; font-size: 0.8rem; }
+        .sync-section input { width: 90%; margin-bottom: 5px; font-size: 0.7rem; }
+        #sync-status { font-size: 0.7rem; color: #e67e22; margin-top: 5px; }
+
+        /* Yearly view specifics */
+        .year-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 20px; }
+        .mini-month { background: white; padding: 10px; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .mini-grid { display: grid; grid-template-columns: repeat(7, 1fr); font-size: 0.7rem; }
+        .mini-day { text-align: center; padding: 2px; aspect-ratio: 1; border-radius: 50%; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+<header>
+    <div id="current-period-label" style="font-size: 1.2rem; font-weight: bold;">Caricamento...</div>
+    <div class="controls">
+        <button onclick="changePeriod(-1)">◄</button>
+        <button onclick="setView('month')" id="btn-month" class="active">Mese</button>
+        <button onclick="setView('year')" id="btn-year">Anno</button>
+        <button onclick="changePeriod(1)">►</button>
+    </div>
+</header>
+
+<main>
+    <section id="sidebar">
+        <div class="sync-section">
+            <strong>GitHub Sync (CSV)</strong><br>
+            <input type="password" id="gh-token" placeholder="GitHub Token">
+            <input type="text" id="gh-repo" placeholder="username/repo_name">
+            <button onclick="saveToGitHub()" style="background: #27ae60; color:white; width:100%">Salva su GitHub</button>
+            <button onclick="loadFromGitHub()" style="background: #2980b9; color:white; width:100%; margin-top:5px;">Carica da GitHub</button>
+            <div id="sync-status">Pronto</div>
+        </div>
+
+        <h3>Strumenti</h3>
+        <div class="tool tool-smart" onclick="selectTool('smart')" id="tool-smart">Smart</div>
+        <div class="tool tool-leave" onclick="selectTool('leave')" id="tool-leave">Ferie</div>
+        <div class="tool tool-partial" onclick="selectTool('partial')" id="tool-partial">Permesso</div>
+        <div class="tool tool-illness" onclick="selectTool('illness')" id="tool-illness">Malattia</div>
+        <div class="tool tool-delete" onclick="selectTool('delete')" id="tool-delete">Cancella</div>
+        
+        <div class="totals">
+            <h4>Totali</h4>
+            <div class="total-item">Smart: <span id="tot-smart">0</span></div>
+            <div class="total-item">Ferie: <span id="tot-leave">0</span></div>
+            <div class="total-item">Permessi: <span id="tot-partial">0</span></div>
+            <div class="total-item">Malattia: <span id="tot-illness">0</span></div>
+        </div>
+    </section>
+
+    <section id="calendar-container"></section>
+</main>
+
+<script>
+    let currentView = 'month';
+    let currentDate = new Date();
+    let selectedTool = 'smart';
+    let events = JSON.parse(localStorage.getItem('cal_events')) || {};
+
+    const monthNames = ["Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno", "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre"];
+    const eventTypes = {
+        smart: { label: 'Smart', color: 'var(--smart)' },
+        leave: { label: 'Ferie', color: 'var(--leave)' },
+        partial: { label: 'Permesso', color: 'var(--partial)' },
+        illness: { label: 'Malattia', color: 'var(--illness)' }
+    };
+
+    // --- CSV & GITHUB LOGIC ---
+
+    function eventsToCSV() {
+        let csv = "date,type\n";
+        for (const [date, type] of Object.entries(events)) {
+            csv += `${date},${type}\n`;
+        }
+        return csv;
+    }
+
+    function csvToEvents(csvText) {
+        const lines = csvText.split('\n');
+        const newEvents = {};
+        for (let i = 1; i < lines.length; i++) {
+            const [date, type] = lines[i].split(',');
+            if (date && type) newEvents[date.trim()] = type.trim();
+        }
+        return newEvents;
+    }
+
+    async function saveToGitHub() {
+        const token = document.getElementById('gh-token').value;
+        const repo = document.getElementById('gh-repo').value;
+        const status = document.getElementById('sync-status');
+        
+        if (!token || !repo) return alert("Inserisci Token e Repo (es: mario/calendario)");
+
+        status.innerText = "Salvataggio...";
+        const fileName = "data.csv";
+        const url = `https://api.github.com/repos/${repo}/contents/${fileName}`;
+        const content = btoa(eventsToCSV()); // Base64 encode
+
+        try {
+            // 1. Get existing file SHA (required to update)
+            const getRes = await fetch(url, {
+                headers: { "Authorization": `token ${token}` }
+            });
+            let sha = "";
+            if (getRes.ok) {
+                const data = await getRes.json();
+                sha = data.sha;
+            }
+
+            // 2. Upload/Update file
+            const putRes = await fetch(url, {
+                method: "PUT",
+                headers: { 
+                    "Authorization": `token ${token}`,
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    message: "Update calendar data",
+                    content: content,
+                    sha: sha || undefined
+                })
+            });
+
+            if (putRes.ok) status.innerText = "✅ Salvato su GitHub!";
+            else status.innerText = "❌ Errore durante il salvataggio";
+        } catch (e) {
+            status.innerText = "❌ Errore connessione";
+        }
+    }
+
+    async function loadFromGitHub() {
+        const token = document.getElementById('gh-token').value;
+        const repo = document.getElementById('gh-repo').value;
+        const status = document.getElementById('sync-status');
+        
+        status.innerText = "Caricamento...";
+        const url = `https://api.github.com/repos/${repo}/contents/data.csv`;
+
+        try {
+            const res = await fetch(url, {
+                headers: { "Authorization": `token ${token}` }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                const decoded = atob(data.content);
+                events = csvToEvents(decoded);
+                localStorage.setItem('cal_events', JSON.stringify(events));
+                render();
+                status.innerText = "✅ Dati caricati!";
+            } else {
+                status.innerText = "❌ File non trovato";
+            }
+        } catch (e) {
+            status.innerText = "❌ Errore caricamento";
+        }
+    }
+
+    // [Keeping UI Logic: Italian Holidays, Render, Tool selection...]
+    
+    function getItalianHolidays(year) {
+        const holidays = { [`${year}-01-01`]: "Capodanno", [`${year}-01-06`]: "Epifania", [`${year}-04-25`]: "Liberazione", [`${year}-05-01`]: "Lavoro", [`${year}-06-02`]: "Repubblica", [`${year}-08-15`]: "Ferragosto", [`${year}-11-01`]: "Ognissanti", [`${year}-12-08`]: "Immacolata", [`${year}-12-25`]: "Natale", [`${year}-12-26`]: "S. Stefano" };
+        const a = year % 19, b = Math.floor(year / 100), c = year % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451), month = Math.floor((h + l - 7 * m + 114) / 31), day = ((h + l - 7 * m + 114) % 31) + 1;
+        holidays[formatDate(new Date(year, month - 1, day))] = "Pasqua";
+        holidays[formatDate(new Date(year, month - 1, day + 1))] = "Pasquetta";
+        return holidays;
+    }
+
+    function formatDate(date) { return date.toISOString().split('T')[0]; }
+
+    function selectTool(tool) {
+        selectedTool = tool;
+        document.querySelectorAll('.tool').forEach(el => el.classList.remove('selected'));
+        document.getElementById(`tool-${tool}`).classList.add('selected');
+    }
+
+    function toggleEvent(dateStr) {
+        if (selectedTool === 'delete') delete events[dateStr];
+        else events[dateStr] = selectedTool;
+        localStorage.setItem('cal_events', JSON.stringify(events));
+        render();
+    }
+
+    function changePeriod(delta) {
+        if (currentView === 'month') currentDate.setMonth(currentDate.getMonth() + delta);
+        else currentDate.setFullYear(currentDate.getFullYear() + delta);
+        render();
+    }
+
+    function setView(view) {
+        currentView = view;
+        document.getElementById('btn-month').classList.toggle('active', view === 'month');
+        document.getElementById('btn-year').classList.toggle('active', view === 'year');
+        render();
+    }
+
+    function render() {
+        const container = document.getElementById('calendar-container');
+        const label = document.getElementById('current-period-label');
+        container.innerHTML = '';
+
+        if (currentView === 'month') {
+            label.innerText = `${monthNames[currentDate.getMonth()]} ${currentDate.getFullYear()}`;
+            renderMonth(currentDate.getFullYear(), currentDate.getMonth(), container);
+        } else {
+            label.innerText = `Anno ${currentDate.getFullYear()}`;
+            const yearGrid = document.createElement('div');
+            yearGrid.className = 'year-grid';
+            for (let m = 0; m < 12; m++) {
+                const mini = document.createElement('div');
+                mini.className = 'mini-month';
+                mini.innerHTML = `<strong>${monthNames[m]}</strong>`;
+                renderMonth(currentDate.getFullYear(), m, mini, true);
+                yearGrid.appendChild(mini);
+            }
+            container.appendChild(yearGrid);
+        }
+        updateTotals();
+    }
+
+    function renderMonth(year, month, container, isMini = false) {
+        const grid = document.createElement('div');
+        grid.className = isMini ? 'mini-grid' : 'month-grid';
+        const firstDay = new Date(year, month, 1).getDay();
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+        const holidays = getItalianHolidays(year);
+
+        if (!isMini) ["Dom", "Lun", "Mar", "Mer", "Gio", "Ven", "Sab"].forEach(d => {
+            const h = document.createElement('div'); h.className = 'day-header'; h.innerText = d; grid.appendChild(h);
+        });
+
+        for (let i = 0; i < firstDay; i++) grid.appendChild(document.createElement('div'));
+
+        for (let d = 1; d <= daysInMonth; d++) {
+            const dateStr = formatDate(new Date(year, month, d));
+            const dayEl = document.createElement('div');
+            dayEl.className = isMini ? 'mini-day' : 'day';
+            const holidayName = holidays[dateStr];
+            if (holidayName || new Date(year, month, d).getDay() === 0) dayEl.classList.add('holiday');
+
+            if (isMini) {
+                if (events[dateStr]) { dayEl.style.backgroundColor = eventTypes[events[dateStr]].color; dayEl.style.color = 'white'; }
+                dayEl.innerText = d;
+            } else {
+                dayEl.innerHTML = `<b>${d}</b> ${holidayName ? '<br><small>'+holidayName+'</small>' : ''}`;
+                if (events[dateStr]) {
+                    const type = eventTypes[events[dateStr]];
+                    const entry = document.createElement('div');
+                    entry.className = 'entry'; entry.style.backgroundColor = type.color; entry.innerText = type.label;
+                    dayEl.appendChild(entry);
+                }
+            }
+            dayEl.onclick = () => toggleEvent(dateStr);
+            grid.appendChild(dayEl);
+        }
+        container.appendChild(grid);
+    }
+
+    function updateTotals() {
+        let counts = { smart: 0, leave: 0, partial: 0, illness: 0 };
+        Object.keys(events).forEach(d => {
+            const [y, m] = d.split('-').map(Number);
+            if (currentView === 'month' && y === currentDate.getFullYear() && m === (currentDate.getMonth()+1)) counts[events[d]]++;
+            if (currentView === 'year' && y === currentDate.getFullYear()) counts[events[d]]++;
+        });
+        for (let t in counts) document.getElementById(`tot-${t}`).innerText = counts[t];
+    }
+
+    // Persist Token/Repo in LocalStorage for convenience
+    document.getElementById('gh-token').addEventListener('change', e => localStorage.setItem('gh_token', e.target.value));
+    document.getElementById('gh-repo').addEventListener('change', e => localStorage.setItem('gh_repo', e.target.value));
+    document.getElementById('gh-token').value = localStorage.getItem('gh_token') || '';
+    document.getElementById('gh-repo').value = localStorage.getItem('gh_repo') || '';
+
+    selectTool('smart');
+    render();
+</script>
+</body>
+</html>
