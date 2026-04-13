@@ -127,7 +127,7 @@
 
         status.innerText = "Salvataggio...";
         const fileName = "data.csv";
-        const url = `https://api.github.com/repos/${repo}/tree/main/${fileName}`;
+        const url = `https://api.github.com/repos/${repo}/contents/${fileName}`;
         const content = btoa(eventsToCSV()); // Base64 encode
 
         try {
@@ -168,7 +168,7 @@
         const status = document.getElementById('sync-status');
         
         status.innerText = "Caricamento...";
-        const url = `https://api.github.com/repos/${repo}/tree/main/data.csv`;
+        const url = `https://api.github.com/repos/${repo}/contents/data.csv`;
 
         try {
             const res = await fetch(url, {
