@@ -133,7 +133,7 @@
         try {
             // 1. Get existing file SHA (required to update)
             const getRes = await fetch(url, {
-                headers: { "Authorization": `token ${token}` }
+                headers: { "Authorization": `bearer ${token}` }
             });
             let sha = "";
             if (getRes.ok) {
@@ -172,7 +172,7 @@
 
         try {
             const res = await fetch(url, {
-                headers: { "Authorization": `token ${token}` }
+                headers: { "Authorization": `bearer ${token}` }
             });
             if (res.ok) {
                 const data = await res.json();
