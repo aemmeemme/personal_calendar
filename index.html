@@ -278,7 +278,7 @@ function getItalianHolidays(year) {
         const daysInMonth = new Date(year, month + 1, 0).getDate();
         const holidays = getItalianHolidays(year);
 
-        if (!isMini) ["Dom", "Lun", "Mar", "Mer", "Gio", "Ven", "Sab"].forEach(d => {
+        if (!isMini) ["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"].forEach(d => {
             const h = document.createElement('div'); h.className = 'day-header'; h.innerText = d; grid.appendChild(h);
         });
 
