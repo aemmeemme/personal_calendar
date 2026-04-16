@@ -274,7 +274,7 @@ function getItalianHolidays(year) {
     function renderMonth(year, month, container, isMini = false) {
         const grid = document.createElement('div');
         grid.className = isMini ? 'mini-grid' : 'month-grid';
-        const firstDay = new Date(year, month, 1).getDay()+1;
+        const firstDay = new Date(year, month, 1).getDay()-1;
         const daysInMonth = new Date(year, month + 1, 0).getDate();
         const holidays = getItalianHolidays(year);
 
