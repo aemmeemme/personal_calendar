@@ -278,7 +278,7 @@ function getItalianHolidays(year) {
         const daysInMonth = new Date(year, month + 1, 0).getDate();
         const holidays = getItalianHolidays(year);
 
-        if (!isMini) ["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"].forEach(d => {
+        if (!isMini) ["Dom", "Lun", "Mar", "Mer", "Gio", "Ven", "Sab"].forEach(d => {
             const h = document.createElement('div'); h.className = 'day-header'; h.innerText = d; grid.appendChild(h);
         });
 
@@ -289,7 +289,8 @@ function getItalianHolidays(year) {
             const dayEl = document.createElement('div');
             dayEl.className = isMini ? 'mini-day' : 'day';
             const holidayName = holidays[dateStr];
-            if (holidayName || new Date(year, month, d).getDay() === 0) dayEl.classList.add('holiday');
+            const dayOfWeek = new Date(year, month, d).getDay();
+            if (holidayName || dayOfWeek === 0) dayEl.classList.add('holiday');
 
             if (isMini) {
                 if (events[dateStr]) { dayEl.style.backgroundColor = eventTypes[events[dateStr]].color; dayEl.style.color = 'white'; }
