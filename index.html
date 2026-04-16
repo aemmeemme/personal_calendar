@@ -290,7 +290,7 @@ function getItalianHolidays(year) {
             dayEl.className = isMini ? 'mini-day' : 'day';
             const holidayName = holidays[dateStr];
             const dayOfWeek = new Date(year, month, d).getDay();
-            if (holidayName || dayOfWeek === 0) dayEl.classList.add('holiday');
+            if (holidayName || dayOfWeek === 0 || dayOfWeek === 6) dayEl.classList.add('holiday');
 
             if (isMini) {
                 if (events[dateStr]) { dayEl.style.backgroundColor = eventTypes[events[dateStr]].color; dayEl.style.color = 'white'; }
